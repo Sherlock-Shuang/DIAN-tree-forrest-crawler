@@ -128,20 +128,18 @@ class DecisionTree:
         node=Node(gini,num_samples,most_class)
         if depth<self.max_depth and num_samples>=self.min_split:
             index = bestsplitdata(data,n_features)
-            if index!=-1:
-                node.index=index
-                left_data= data[data[:, index] == 0]
-                right_data= data[data[:, index] == 1]
-                if left_data.shape[0]>0 and right_data.shape[0]>0:
-                    node.left=self.growtree(left_data,depth+1,n_features)
-                    node.right = self.growtree(right_data, depth + 1,n_features)
+            node.index=index
+            left_data= data[data[:, index] == 0]
+            right_data= data[data[:, index] == 1]
+            if left_data.shape[0]>0 and right_data.shape[0]>0:
+                node.left=self.growtree(left_data,depth+1,n_features)
+                node.right = self.growtree(right_data, depth + 1,n_features)
         return node
 
-    # 预测一个样本情况
+    #预测一个样本情况
     def predict_one(self, sample, node):
-
          if node.left is None and node.right is None:
-         # 叶子节点，返回样本数最多的类别
+         #叶子节点，返回样本数最多的类别
              return node.most_class
          if sample[node.index] == 0:
              return self.predict_one(sample, node.left)
@@ -161,11 +159,11 @@ class RandomForest:
         self.n_trees = n_trees
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
-        self.n_features= n_features
+        self.n_features= n_features#随机子集的特征数
         self.trees = []
 
     def fit(self, X, y):
-        n_samples, n_feature = X.shape
+        n_samples, n_feature = X.shape#样本数和特征数
         if self.n_features is None:
             self.n_features = int(np.sqrt(n_feature))
 
@@ -186,10 +184,13 @@ class RandomForest:
         # 多数投票
         return np.array([np.bincount(preds).argmax() for preds in tree_preds.T])
 
+#得到每个属性的重要性占比
 def compute_feature_importance(forest, labels):
-    importance = {name: 0 for name in labels}
+    importance={}
+    for name in labels:
+        importance.update({name: 0 })#构建字典列表存放每个属性的名字和重要性
     for tree in forest.trees:
-        stack = [tree.root]
+        stack = [tree.root]#从根节点往下统计每个属性分裂次数
         while stack:
             node = stack.pop()
             if node.index is not None:
@@ -197,13 +198,14 @@ def compute_feature_importance(forest, labels):
                 if node.left:
                     stack.append(node.left)
                 if node.right:
-                    stack.append(node.right)
-    # 归一化
+                    stack.append(node.right)#向下递归直到叶节点
+    #归一化
     total = sum(importance.values())
     for v in importance:
         importance[v]/=total
     return importance
 
+#绘制柱状图
 def plot_feature_importance(importance):
     names = list(importance.keys())
     values = list(importance.values())
@@ -227,7 +229,7 @@ testy=testdata[:,-1]
 
 
 #训练随机森林
-rf=RandomForest(n_trees=100,max_depth=3)
+rf=RandomForest(n_trees=150,max_depth=3)
 rf.fit(trainx,trainy)
 #进行预测
 predictions = rf.predict(testx)
@@ -239,7 +241,11 @@ yes=np.sum(boo)
 accuracy=yes/general
 print(f"这个模型的准确率是{accuracy}")
 
+
 importance = compute_feature_importance(rf, labels)
+for key in importance:
+    importance[key]=round(importance[key],2)
+print(f"特征对应重要性：{importance}")
 plot_feature_importance(importance)
 
 
