@@ -241,7 +241,11 @@ yes=np.sum(boo)
 accuracy=yes/general
 print(f"这个模型的准确率是{accuracy}")
 
+
 importance = compute_feature_importance(rf, labels)
+for key in importance:
+    importance[key]=round(importance[key],2)
+print(f"特征对应重要性：{importance}")
 plot_feature_importance(importance)
 
 
