@@ -44,7 +44,7 @@ def changedata(data):
       :param data: 输入的数据数组
       :return: 处理后的数据数组
       """
-    ave=np.median(data[:,:-1],axis=0)
+    ave=np.quantile(data[:,:-1],0.5,axis=0)
     left=np.where(data[:,:-1]>ave,1,0)
     right=data[:,-1].reshape(-1,1)
     data=np.concatenate([left,right],axis=1)
