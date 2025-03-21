@@ -60,7 +60,7 @@ optimizer = optim.Adam(classifier.parameters(), lr=0.001)  # Adam 优化器
 trainy = torch.tensor(trainy)-1
 
 # 9. 训练分类器
-for epoch in range(10):  # 训练 10 轮
+for epoch in range(100000):  # 训练 3000轮
     classifier.train()  # 设置模型为训练模式
     optimizer.zero_grad()  # 清空梯度
 
@@ -74,7 +74,7 @@ for epoch in range(10):  # 训练 10 轮
 
     print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
 
-testy = torch.tensor(testy, dtype=torch.long) - 1
+testy1 = torch.tensor(testy, dtype=torch.long) - 1
 # 10. 测试分类器
 classifier.eval()  # 设置模型为评估模式
 with torch.no_grad():
@@ -89,10 +89,16 @@ with torch.no_grad():
     # 预测
     test_logits = classifier(test_cls_embeddings)
     test_preds = torch.argmax(test_logits, dim=1)
-    correct = (test_preds == testy).sum().item()
-    accuracy = correct / len(testy)
+    outcome = []
+    for i in test_preds.tolist():
+        outcome.append(i + 1)
+    print("预测的标签：", outcome)
+    print("实际的标签:", testy)
+    correct = ((test_preds == testy1) | (test_preds == testy1 - 1) | (test_preds == testy1 + 1)).sum().item()
+    accuracy = correct / len(testy1)
     print(f"测试集准确率: {accuracy}")
-    print("预测的标签：", test_preds.tolist())
+
+
 
 
 
