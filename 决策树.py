@@ -38,20 +38,6 @@ def createdata():
         return None, None
 
 
-def changedata(data):
-    """
-      将数据的每个属性根据平均值分为大小两类
-      :param data: 输入的数据数组
-      :return: 处理后的数据数组
-      """
-    ave=np.quantile(data[:,:-1],0.5,axis=0)
-    left=np.where(data[:,:-1]>ave,1,0)
-    right=data[:,-1].reshape(-1,1)
-    data=np.concatenate([left,right],axis=1)
-    data=data.astype(int)
-    return data
-
-
 def calcgini(data):
     """
       计算数据集的 CART 基尼指数
@@ -65,6 +51,52 @@ def calcgini(data):
         s+=(count/general)**2
     gini=1-s
     return gini
+
+
+def bestsplitpoint(data):
+    """
+    选择最优分割特征和最优分割点
+    :param data: 现存数据
+    :return: 最优分割特征索引和最优分割点
+    """
+    best_gini = float("inf")  # 全局最小基尼指数
+    best_feature = -1  # 最佳特征索引
+    best_point = None  # 最佳分割点
+
+    # 遍历每个特征
+    for i in range(data.shape[1] - 1):
+        # 获取当前特征的所有唯一值（跳过重复值）
+        points = np.unique(data[:, i])
+        # 对连续特征，候选分割点改为相邻值的平均（更精细）
+        # 例如特征值 [1,2,4] 生成候选点 [1.5, 3.0]
+        if len(points) > 1:
+            split_points = (points[:-1] + points[1:]) / 2
+        else:
+            continue  # 如果特征值全部相同，跳过
+
+        # 遍历每个候选分割点
+        for point in split_points:
+            # 分割数据
+            left_mask = data[:, i] < point
+            right_mask = data[:, i] >= point
+            left_subset = data[left_mask]
+            right_subset = data[right_mask]
+
+            if left_subset.size == 0 or right_subset.size == 0:
+                continue
+
+            # 计算加权基尼指数
+            left_gini = calcgini(left_subset)
+            right_gini = calcgini(right_subset)
+            total_gini = (len(left_subset) / len(data)) * left_gini + (len(right_subset) / len(data)) * right_gini
+
+            # 更新全局最优
+            if total_gini < best_gini:
+                best_gini = total_gini
+                best_feature = i
+                best_point = point
+
+    return best_feature, best_point  # 返回全局最优的特征和分割点
 
 def calcnewgini(data,i):
     """
@@ -83,27 +115,15 @@ def calcnewgini(data,i):
         newgini += (count / general) * calcgini(subset)
     return newgini
 
-def bestsplitdata(data):
-    """
-    选择最优分割特征
-    :param data: 现存数据
-    :return: 最优分割特征索引
-    """
-    bestindex=-1
-    bestgini=float("inf")
-    for i in range(4):
-        newgini=calcnewgini(data,i)
-        if newgini<bestgini:
-            bestgini=newgini
-            bestindex=i
-    return bestindex
+
 
 class Node:
     #节点对象
-    def __init__(self,gini,num_samples,index,most_class):
+    def __init__(self,gini,num_samples,index,most_class,bestpoint):
         self.gini=gini
         self.index=index
         self.num=num_samples
+        self.bestpoint=bestpoint
         self.most_class=most_class
         self.left =None
         self.right =None
@@ -118,13 +138,18 @@ class DecisionTree:
     def growtree(self,data,depth=0):
         num_samples = data.shape[0]
         gini=calcgini(data)
-        index = bestsplitdata(data)
+        index,selfpoint= bestsplitpoint(data)
         class_count=[np.sum(data[:,-1]==i) for i in range(3)]
         most_class=np.argmax(class_count)
-        node=Node(gini,num_samples,index,most_class)
+        node=Node(gini,num_samples,index,most_class,selfpoint)
         if depth<self.max_depth and num_samples>=self.min_split:
-            left_data= data[data[:, index] == 0]
-            right_data= data[data[:, index] == 1]
+            best_feature, best_point = bestsplitpoint(data)
+            if best_feature == -1:  # 无法继续分裂
+                return node
+
+            # 根据 best_feature 和 best_point 分割数据
+            left_data = data[data[:, best_feature] < best_point]
+            right_data = data[data[:, best_feature] >= best_point]
             if left_data.shape[0]>0 and right_data.shape[0]>0:
                 node.left=self.growtree(left_data,depth=depth+1)
                 node.right = self.growtree(right_data, depth=depth + 1)
@@ -135,7 +160,7 @@ class DecisionTree:
         if node.left is None and node.right is None:
             #叶子节点，返回样本数最多的类别
             return node.most_class
-        if sample[node.index] == 0:
+        if sample[node.index] <node.bestpoint:
             return self.predict_one(sample, node.left)
         else:
             return self.predict_one(sample, node.right)
@@ -150,7 +175,6 @@ class DecisionTree:
 
 
 data,labels=createdata()
-data=changedata(data)
 traindata=data[:int(data.shape[0]*0.75)]#将数据随机分成训练数据和测试数据
 testdata=data[int(data.shape[0]*0.75):]
 a=testdata[:,-1]
@@ -170,7 +194,6 @@ boo=predictions==true_labels
 yes=np.sum(boo)
 accuracy=yes/general
 print(f"这个模型的准确率是{accuracy}")
-
 
 
 

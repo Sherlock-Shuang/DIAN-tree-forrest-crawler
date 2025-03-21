@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 def createdata():
     """
       从 iris.data 文件中读取数据，处理类别标签，转换为 numpy 数组并打乱顺序
@@ -36,21 +35,6 @@ def createdata():
     except FileNotFoundError:
         print("文件未找到，请检查文件路径。")
         return None, None
-
-
-def changedata(data):
-    """
-      将数据的每个属性根据平均值分为大小两类
-      :param data: 输入的数据数组
-      :return: 处理后的数据数组
-      """
-    ave=np.median(data[:,:-1],axis=0)
-    left=np.where(data[:,:-1]>ave,1,0)
-    right=data[:,-1].reshape(-1,1)
-    data=np.concatenate([left,right],axis=1)
-    data=data.astype(int)
-    return data
-
 
 def calcgini(data):
     """
@@ -91,24 +75,53 @@ def bestsplitdata(data,n_features=None):
     """
     bestindex=-1
     bestgini=float("inf")
+    bestpoint=0
     all_features=range(data.shape[1]-1)
     if n_features:
         features=np.random.choice(all_features,size=n_features,replace=False)
     else:
         features=all_features
     for i in features:
-        newgini=calcnewgini(data,i)
-        if newgini<bestgini:
-            bestgini=newgini
-            bestindex=i
-    return bestindex
+        # 获取当前特征的所有唯一值（跳过重复值）
+        points = np.unique(data[:, i])
+        # 对连续特征，候选分割点改为相邻值的平均（更精细）
+        # 例如特征值 [1,2,4] 生成候选点 [1.5, 3.0]
+        if len(points) > 1:
+            split_points = (points[:-1] + points[1:]) / 2
+        else:
+            continue  # 如果特征值全部相同，跳过
+
+        # 遍历每个候选分割点
+        for point in split_points:
+            # 分割数据
+            left_mask = data[:, i] < point
+            right_mask = data[:, i] >= point
+            left_subset = data[left_mask]
+            right_subset = data[right_mask]
+
+            if left_subset.size == 0 or right_subset.size == 0:
+                continue
+
+            # 计算加权基尼指数
+            left_gini = calcgini(left_subset)
+            right_gini = calcgini(right_subset)
+            total_gini = (len(left_subset) / len(data)) * left_gini + (len(right_subset) / len(data)) * right_gini
+
+            # 更新全局最优
+            if total_gini < bestgini:
+                bestgini = total_gini
+                bestindex = i
+                bestpoint = point
+
+    return bestindex, bestpoint
 
 class Node:
     #节点对象
-    def __init__(self,gini,num_samples,most_class):
+    def __init__(self,gini,num_samples,most_class,bestpoint):
         self.gini=gini
         self.index=None
         self.num=num_samples
+        self.bestpoint=bestpoint
         self.most_class=most_class
         self.left =None
         self.right =None
@@ -125,12 +138,12 @@ class DecisionTree:
         gini=calcgini(data)
         class_count=[np.sum(data[:,-1]==i) for i in range(3)]
         most_class=np.argmax(class_count)
-        node=Node(gini,num_samples,most_class)
+        index, point = bestsplitdata(data, n_features)
+        node = Node(gini, num_samples, most_class, point)
         if depth<self.max_depth and num_samples>=self.min_split:
-            index = bestsplitdata(data,n_features)
             node.index=index
-            left_data= data[data[:, index] == 0]
-            right_data= data[data[:, index] == 1]
+            left_data= data[data[:, index] <point]
+            right_data= data[data[:, index] >=point]
             if left_data.shape[0]>0 and right_data.shape[0]>0:
                 node.left=self.growtree(left_data,depth+1,n_features)
                 node.right = self.growtree(right_data, depth + 1,n_features)
@@ -141,7 +154,7 @@ class DecisionTree:
          if node.left is None and node.right is None:
          #叶子节点，返回样本数最多的类别
              return node.most_class
-         if sample[node.index] == 0:
+         if sample[node.index] <node.bestpoint:
              return self.predict_one(sample, node.left)
          else:
              return self.predict_one(sample, node.right)
@@ -217,7 +230,6 @@ def plot_feature_importance(importance):
 
 
 data,labels=createdata()
-data=changedata(data)
 
 Y=data[:,-1].astype(int)
 traindata=data[:int(data.shape[0]*0.75)]#将数据随机分成训练数据和测试数据
